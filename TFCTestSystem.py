@@ -204,7 +204,11 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
 
         project_root = params.getParam("project_root").getStringValue()
         if project_root == "":
-            self.project_root_ = os.getcwd() + "/" if project_root == "" else project_root
+            self.project_root_ = os.getcwd() + "/"
+        else:
+            self.project_root_ = project_root
+            if not self.project_root_.endswith("/"):
+                self.project_root_ += "/"
 
         print("Project-root", self.project_root_)
 
@@ -236,48 +240,49 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
         self.default_weight_ = ""
         self.weight_map_ = ""
 
-        with open(config_file_path) as yaml_file:
-            yaml_dict = yaml.safe_load(yaml_file)
+        if config_file_path != "" and os.path.isfile(config_file_path):
+            with open(config_file_path) as yaml_file:
+                yaml_dict = yaml.safe_load(yaml_file) or {}
 
-            for param in yaml_dict:
-                if param == "default_executable":
-                    self.executable_ = yaml_dict[param]
-                if param == "print_width":
-                    self.print_width_ = yaml_dict[param]
-                if param == "default_args":
-                    self.default_args_ = yaml_dict[param]
-                if param == "env_vars":
-                    self.env_vars_ = yaml_dict[param]
-                if param == "weight_map":
-                    self.weight_map_ = yaml_dict[param]
-                if param == "default_weight":
-                    self.default_weight_ = yaml_dict[param]
+                for param in yaml_dict:
+                    if param == "default_executable":
+                        self.executable_ = yaml_dict[param]
+                    if param == "print_width":
+                        self.print_width_ = yaml_dict[param]
+                    if param == "default_args":
+                        self.default_args_ = yaml_dict[param]
+                    if param == "env_vars":
+                        self.env_vars_ = yaml_dict[param]
+                    if param == "weight_map":
+                        self.weight_map_ = yaml_dict[param]
+                    if param == "default_weight":
+                        self.default_weight_ = yaml_dict[param]
 
-                if param == "requirement_docs":
-                    requirement_docs = yaml_dict[param]
-                    self.requirement_docs_ = []
-                    for subparam in requirement_docs:
-                        self.requirement_docs_.append(subparam)
+                    if param == "requirement_docs":
+                        requirement_docs = yaml_dict[param]
+                        self.requirement_docs_ = []
+                        for subparam in requirement_docs:
+                            self.requirement_docs_.append(subparam)
 
-                    if len(self.requirement_docs_) > 0:
-                        print("Requirement docs:")
+                        if len(self.requirement_docs_) > 0:
+                            print("Requirement docs:")
+                            for req_doc in self.requirement_docs_:
+                                existence_status = "" if os.path.isfile(req_doc) else " (not found)"
+                                print(f"  {req_doc}" + existence_status)
+
+                        self.requirement_blocks_ = []
                         for req_doc in self.requirement_docs_:
-                            existence_status = "" if os.path.isfile(req_doc) else " (not found)"
-                            print(f"  {req_doc}" + existence_status)
+                            if not os.path.isfile(req_doc):
+                                continue
 
-                    self.requirement_blocks_ = []
-                    for req_doc in self.requirement_docs_:
-                        if not os.path.isfile(req_doc):
-                            continue
+                            doc_reqs = self.parseRequirementDocument(req_doc)
 
-                        doc_reqs = self.parseRequirementDocument(req_doc)
+                            self.requirement_blocks_.append(doc_reqs)
 
-                        self.requirement_blocks_.append(doc_reqs)
-
-                if param == "requirements_output":
-                    self.requirements_matrix_outputfile_ = yaml_dict[param]
-                if param == "results_output":
-                    self.test_results_database_outputfile_= yaml_dict[param]
+                    if param == "requirements_output":
+                        self.requirements_matrix_outputfile_ = yaml_dict[param]
+                    if param == "results_output":
+                        self.test_results_database_outputfile_= yaml_dict[param]
 
         if self.weight_map_ == "":
             self.weight_map_ = {"short": 2.0, "intermediate": 10.0, "long": 20.0}
@@ -298,7 +303,7 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
                       f'Falling back to "all".\033[0m')
                 self.weights_ = list(self.weight_map_.keys())
 
-        self.weight_classes_allowed_ = self.weights_
+        self.weight_classes_allowed_ = list(self.weights_)
 
         # Append "none" weight class to weight_classes_allowed
         # This makes the test system agnostic to the weight class definitions
@@ -573,8 +578,47 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
 
 
     def run(self):
-        """Actually executes the test system"""
+        """Actually executes the test system — now delegates to pytest backend.
 
+        No change required in run_regression_tests (which does
+        `suite = PyFactory.makeObject("MyExtension", Parameter("", params)); suite.run()`).
+        Frontend (TFCTestSystem.py:356 discovery, weight_map, requirement_docs) is unchanged;
+        backend is pytest-xdist via tfc_TestSystem/TFCpytest.py:219 run_with_pytest.
+
+        Falls back to legacy poll loop if pytest is unavailable (env TFC_USE_LEGACY=1).
+        """
+        if os.getenv("TFC_USE_LEGACY", "0") == "1":
+            return self._legacy_run()
+
+        try:
+            # Lazy import to avoid circular import (TFCpytest imports TFCTestSystem)
+            from .TFCpytest import run_with_pytest
+            return run_with_pytest(
+                directory=self.directory_,
+                executable=self.executable_,
+                project_root=self.project_root_,
+                num_jobs=self.num_jobs_,
+                weights=self.weights_,
+                no_time_limit=self.no_time_limit_,
+                config_file=self.config_file_,
+                exclude_folders=self.exclude_folders_,
+                requirement_docs=self.requirement_docs_,
+                requirements_matrix_outputfile=self.requirements_matrix_outputfile_,
+                test_results_database_outputfile=self.test_results_database_outputfile_,
+                generate_requirements_matrix=self.generate_requirements_matrix_,
+                generate_results_database=self.generate_results_database_,
+                merge_results_file=self.merge_results_file_,
+                tests_print_result_tags=self.tests_print_result_tags_,
+                selected_tests=self.selected_tests_,
+                test_system_cls=self.__class__,
+            )
+        except Exception as ex:
+            print(f"\033[33mWARNING: pytest backend failed ({ex}), falling back to legacy run()\033[0m")
+            import traceback; traceback.print_exc()
+            return self._legacy_run()
+
+    def _legacy_run(self):
+        """Legacy poll-loop (kept for TFC_USE_LEGACY=1). Fixed for unschedulable/deadlock."""
         start_time = time.perf_counter()
 
         job_state = {}
@@ -584,11 +628,29 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
 
         # ======================================= Testing phase
         print("\nRunning tests with weight class:" + self.weight_classes_allowed_.__str__() + "")
+
+        # Early check for unschedulable tests (num_procs > capacity) to avoid deadlock hang
+        for test in self.tests_:
+            if test.weight_class_ not in self.weight_classes_allowed_:
+                continue
+            if test.num_procs_ > capacity:
+                print(f'\033[31mWARNING: Test "{test.name_}" requires {test.num_procs_} procs '
+                      f'but capacity is {capacity}. Marking as failed to avoid deadlock.\033[0m')
+                test.submitted_ = True
+                test.ran_ = True
+                test.passed_ = False
+                test.fail_flag_ = f"Unschedulable: num_procs {test.num_procs_} > num_jobs {capacity}"
+                test.fail_flag_reason_ = test.fail_flag_
+                active_tests.append(test)
+                self.num_init_warnings_ += 1
+
         k = 0
+        deadlock_stall = 0
         while True:
             k += 1
 
             done = True  # Assume we are done
+            submitted_this_iter = 0
             for test in self.tests_:
                 if test.ran_:
                     continue
@@ -603,6 +665,7 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
                         test.submit(self)
 
                         active_tests.append(test)
+                        submitted_this_iter += 1
 
             # Check test progression
             system_load = 0
@@ -619,6 +682,25 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
 
             if done:
                 break # from while-loop
+
+            # Deadlock detection: no progress, no running jobs, but still pending
+            if system_load == 0 and submitted_this_iter == 0:
+                deadlock_stall += 1
+            else:
+                deadlock_stall = 0
+            if deadlock_stall > 500:  # ~5s stalled
+                print("\033[31mERROR: Deadlock detected - pending tests cannot be scheduled "
+                      "(circular dependencies or unsatisfiable constraints). Aborting.\033[0m")
+                for test in self.tests_:
+                    if not test.ran_ and test.weight_class_ in self.weight_classes_allowed_ and not test.submitted_:
+                        print(f"  Blocked: {test.name_} deps={[d.getStringValue() for d in test.dependencies_]}")
+                        test.submitted_ = True
+                        test.ran_ = True
+                        test.passed_ = False
+                        test.fail_flag_ = "Deadlock: unsatisfied dependencies"
+                        test.fail_flag_reason_ = test.fail_flag_
+                        active_tests.append(test)
+                break
 
         # ======================================= Post-test phase
         end_time = time.perf_counter()
