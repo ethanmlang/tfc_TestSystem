@@ -2,6 +2,29 @@ import yaml
 
 
 class TFCTestResultsDatabase:
+    @staticmethod
+    def _failedTestNamesFromResults(results_file: str) -> list[str]:
+        """Return test names explicitly marked ``passed: false``."""
+        with open(results_file, "r", encoding="utf-8") as db_file:
+            results = yaml.safe_load(db_file) or []
+
+        if not isinstance(results, list):
+            raise ValueError(
+                f'Results file "{results_file}" must contain a list.')
+
+        failed_names = []
+        for entry in results:
+            if not isinstance(entry, dict) or entry.get("passed") is not False:
+                continue
+            name = entry.get("name")
+            if not isinstance(name, str) or not name:
+                raise ValueError(
+                    f'Failed result in "{results_file}" has no valid name.')
+            failed_names.append(name)
+
+        return failed_names
+
+
     def _include_in_results_database(self, test_object) -> bool:
         return bool(
             getattr(test_object, "ran_", False))

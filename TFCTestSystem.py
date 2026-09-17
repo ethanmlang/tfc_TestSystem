@@ -89,6 +89,12 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
                                 "Generate results database.")
         params.addOptionalParam("merge_results_file", "",
                                 "Existing TestResults.yaml file to merge updated test results into.")
+        params.addOptionalParam("rerun_failures_file", "",
+                                "Existing TestResults.yaml file whose failed tests "
+                                "should be rerun.")
+        params.addOptionalParam("rebuild_rtm_file", "",
+                                "TestResults.yaml file from which to rebuild the "
+                                "requirements traceability matrix after the run.")
         params.addOptionalParam("tests_print_result_tags", False,
                                 "A flag, when set, makes tests verbosely print their"
                                 " result tags and values on the same line as "
@@ -124,10 +130,18 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
         self.config_file_ = params.getParam("config_file").getStringValue()
         self.compiler_ = os.getenv("COMPILER")
         self.merge_results_file_ = params.getParam("merge_results_file").getStringValue()
+        self.rerun_failures_file_ = params.getParam("rerun_failures_file").getStringValue()
+        self.rebuild_rtm_file_ = params.getParam("rebuild_rtm_file").getStringValue()
         selected_tests = params.getParam("selected_tests")
         self.selected_tests_ = []
         for subparam in selected_tests:
             self.selected_tests_.append(subparam.getStringValue())
+        if self.rerun_failures_file_:
+            if self.selected_tests_:
+                raise ValueError(
+                    "selected_tests and rerun_failures_file cannot both be set.")
+            self.selected_tests_ = self._failedTestNamesFromResults(
+                self.rerun_failures_file_)
         self.os_version_ = platform.version()
         self.os_release_ = platform.release()
         self.os_details_ = platform.platform()
@@ -279,6 +293,10 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
                 if param == "results_output":
                     self.test_results_database_outputfile_= yaml_dict[param]
 
+        if self.merge_results_file_:
+            self.generate_results_database_ = True
+            self.test_results_database_outputfile_ = self.merge_results_file_
+
         if self.weight_map_ == "":
             self.weight_map_ = {"short": 2.0, "intermediate": 10.0, "long": 20.0}
 
@@ -323,7 +341,7 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
                                                           True)
             self._parseTestFiles(test_files=test_files)
 
-        if self.selected_tests_:
+        if self.selected_tests_ or self.rerun_failures_file_:
             self.tests_ = self._getFilteredSelectedTests()
 
         for test in self.tests_:
@@ -563,7 +581,7 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
         print("Selected test filter active:")
         print(f"  Requested tests          : {len(selected_names)}")
         print(f"  Including dependencies   : {len(dependency_names)}")
-        print(f"  Tests scheduled to run   : {len(self.tests_)}")
+        print(f"  Tests scheduled to run   : {len(filtered_tests)}")
         if missing_tests:
             print("  Requested tests not found:")
             for name in missing_tests:
@@ -649,6 +667,9 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
             self.writeRequirementsTraceabilityMatrix()
         if self.generate_results_database_:
             self.writeResultsDatabase()
+        if self.rebuild_rtm_file_:
+            self.writeRequirementsTraceabilityMatrixFromResults(
+                self.rebuild_rtm_file_)
 
         # Printing failure logs
         failure_reasons: list[str] = []
