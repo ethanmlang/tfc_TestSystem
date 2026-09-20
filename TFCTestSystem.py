@@ -5,9 +5,6 @@ import sys
 sys.path.append(file_path + "../")
 sys.path.append(file_path + "./")
 
-# from tfc_PyFactory.InputParameters import InputParameters
-
-import tfc_PyFactory
 from tfc_PyFactory import *
 import TFCTestObject
 from TFCTestObject import *
@@ -19,6 +16,8 @@ import os
 import yaml
 import re
 import platform
+import shlex
+import subprocess
 
 # Blurb to fix yaml.safe_load reading scientific notation floats as strings,
 # i.e. 1e5 is seen as a string by default.
@@ -370,6 +369,59 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
         print(f" System release           : {self.os_release_}")
         print(f" ")
 
+    def _runScript(self, script, cwd=None):
+        """Run a POSIX-style test script and wait for it to finish."""
+        if isinstance(script, (list, tuple)):
+            command = shlex.join(str(argument) for argument in script)
+        else:
+            command = str(script)
+
+        if platform.system() == "Windows":
+            bash = None
+
+            for variable in ("ProgramFiles", "ProgramFiles(x86)"):
+                program_files = os.environ.get(variable)
+                if program_files:
+                    candidate = os.path.join(
+                        program_files,
+                        "Git",
+                        "bin",
+                        "bash.exe",
+                    )
+                    if os.path.isfile(candidate):
+                        bash = candidate
+                        break
+
+            if bash is None:
+                bash = shutil.which("bash")
+
+            if bash is None:
+                raise FileNotFoundError(
+                    "Git Bash was not found. Install Git for Windows or add "
+                    "its bin directory to PATH."
+                )
+
+            args = [
+                bash,
+                "--noprofile",
+                "--norc",
+                "-lc",
+                command,
+            ]
+            shell = False
+        else:
+            args = command
+            shell = True
+
+        return subprocess.run(
+            args,
+            cwd=cwd,
+            shell=shell,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
 
     def _recursiveFindTestListFiles(self, test_dir: str, exclude_folders: list, verbose: bool = False):
         """Recurses through a directory to find *tests*.yaml files"""
@@ -477,9 +529,9 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
                         if temp_dict['weight_class'] not in self.weight_classes_allowed_:
                             continue
                     # run script to create copy test file
-                    result = subprocess.run([copy_script,input_dir+test_name+'.i'],
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE)
+                    result = self._runScript(
+                        [copy_script, input_dir + test_name + '.i']
+                    )
                     # check if subprocess ran correctly
                     if result.returncode != 0:
                         print(f"\033[31mWARNING: Error running copy script \"{copy_script}\"\033[0m")

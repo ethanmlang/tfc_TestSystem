@@ -147,6 +147,7 @@ class TFCTestObject(TFCObject):
             check = PyFactory.makeObject(id, check_input)
             self.checks_.append(check)
 
+        self.name_ = self.name_.replace("\\", "/")
         print(f'  Created test-job \"{self.name_}\" with {len(self.checks_)} checks')
 
         self.ran_: bool = False
@@ -258,14 +259,9 @@ class TFCTestObject(TFCObject):
         if not self.prerun_script_ == "":
             script = self.prerun_script_
             script = self.keywordReplace(script)
-            preprocess = subprocess.Popen(script,
-                                        cwd=dir_,
-                                        shell=True,
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE,
-                                        universal_newlines=True)
-
-            out, err = preprocess.communicate()
+            preprocess = test_system._runScript(script, cwd=dir_)
+            out = preprocess.stdout
+            err = preprocess.stderr
             error_code = preprocess.returncode
 
             if error_code != 0:
@@ -480,14 +476,9 @@ class TFCTestObject(TFCObject):
             if not self.precheck_script_ == "":
                 script = self.precheck_script_
                 script = self.keywordReplace(script)
-                preprocess = subprocess.Popen(script,
-                                            cwd=dir_,
-                                            shell=True,
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE,
-                                            universal_newlines=True)
-
-                out, err = preprocess.communicate()
+                preprocess = test_system._runScript(script, cwd=dir_)
+                out = preprocess.stdout
+                err = preprocess.stderr
                 error_code = preprocess.returncode
 
                 if error_code != 0:
@@ -546,14 +537,9 @@ class TFCTestObject(TFCObject):
             if not self.postrun_script_ == "":
                 script = self.postrun_script_
                 script = self.keywordReplace(script)
-                preprocess = subprocess.Popen(script,
-                                            cwd=dir_,
-                                            shell=True,
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE,
-                                            universal_newlines=True)
-
-                out, err = preprocess.communicate()
+                preprocess = test_system._runScript(script, cwd=dir_)
+                out = preprocess.stdout
+                err = preprocess.stderr
                 error_code = preprocess.returncode
 
                 if error_code != 0:
