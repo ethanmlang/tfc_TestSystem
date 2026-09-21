@@ -1,0 +1,29 @@
+failed_test_is_selected:
+  executable: "python"
+  args: "test_rerun_and_windows.py failed_test_is_selected"
+  checks: [{type: ExitCodeCheck}]
+
+selected_test_dependencies_are_included:
+  executable: "python"
+  args: "test_rerun_and_windows.py selected_test_dependencies_are_included"
+  checks: [{type: ExitCodeCheck}]
+
+merge_preserves_results_not_rerun:
+  executable: "python"
+  args: "test_rerun_and_windows.py merge_preserves_results_not_rerun"
+  checks: [{type: ExitCodeCheck}]
+
+merge_replaces_rerun_result:
+  executable: "python"
+  args: "test_rerun_and_windows.py merge_replaces_rerun_result"
+  checks: [{type: ExitCodeCheck}]
+
+windows_name_matches_normalized_name:
+  executable: "python"
+  args: "test_rerun_and_windows.py windows_name_matches_normalized_name"
+  checks: [{type: ExitCodeCheck}]
+
+main_executable_uses_native_shell:
+  executable: "python"
+  args: "test_rerun_and_windows.py main_executable_uses_native_shell"
+  checks: [{type: ExitCodeCheck}]

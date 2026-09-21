@@ -606,9 +606,17 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
 
 
     def _getFilteredSelectedTests(self):
-        selected_names = set(self.selected_tests_)
+        selected_names = {
+            name.replace("\\", "/")
+            for name in self.selected_tests_
+        }
+
         dependency_names: set[str] = set()
-        queue = [test for test in self.tests_ if test.name_ in selected_names]
+        queue = [
+            test
+            for test in self.tests_
+            if test.name_ in selected_names
+        ]
 
         while queue:
             test = queue.pop()
@@ -616,7 +624,9 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
                 dep_name = dependency.getStringValue()
                 if dep_name in ("", '""'):
                     continue
+
                 dependency_names.add(dep_name)
+
                 for candidate in self.tests_:
                     candidate_name = candidate.name_.rsplit("/", 1)[-1]
                     if candidate_name == dep_name:
@@ -625,15 +635,20 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
         filtered_tests = []
         existing_names = {test.name_ for test in self.tests_}
         missing_tests = sorted(selected_names.difference(existing_names))
+
         for test in self.tests_:
             short_name = test.name_.rsplit("/", 1)[-1]
-            if test.name_ in selected_names or short_name in dependency_names:
+            if (
+                test.name_ in selected_names
+                or short_name in dependency_names
+            ):
                 filtered_tests.append(test)
 
         print("Selected test filter active:")
         print(f"  Requested tests          : {len(selected_names)}")
         print(f"  Including dependencies   : {len(dependency_names)}")
         print(f"  Tests scheduled to run   : {len(filtered_tests)}")
+
         if missing_tests:
             print("  Requested tests not found:")
             for name in missing_tests:

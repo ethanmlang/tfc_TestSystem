@@ -45,16 +45,16 @@ parser.add_argument(
     help="The number of job slots available to run tests"
 )
 parser.add_argument(
-    "-w", "--weights", default=1, type=int, required=False,
-    help="Weight classes to allow. "
-                                "0=None, "
-                                "1=Short, "
-                                "2=Intermediate, "
-                                "3=Short+Intermediate, "
-                                "4=Long, "
-                                "5=Long+Short, "
-                                "6=Long+Intermediate, "
-                                "7=All"
+    "-w",
+    "--weights",
+    default=["all"],
+    nargs="+",
+    type=str,
+    required=False,
+    help=(
+        "Weight classes to execute. Pass one or more configured class "
+        "names, or 'all'."
+    ),
 )
 parser.add_argument(
     "-c", "--config_file", default="TestSystemCONFIG.yaml", type=str,
