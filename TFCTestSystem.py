@@ -372,11 +372,18 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
     def _runScript(self, script, cwd=None):
         """Run a POSIX-style test script and wait for it to finish."""
         if isinstance(script, (list, tuple)):
-            command = shlex.join(str(argument) for argument in script)
+            command = shlex.join(
+                str(argument)
+                for argument in script
+            )
         else:
             command = str(script)
 
         if platform.system() == "Windows":
+            # Commands run through Git Bash, so use POSIX-compatible
+            # separators for any Windows paths embedded in the command.
+            command = command.replace("\\", "/")
+
             bash = None
 
             for variable in ("ProgramFiles", "ProgramFiles(x86)"):
@@ -421,7 +428,6 @@ class TFCTestSystem(TFCObject, TFCTraceabilityMatrix, TFCTestResultsDatabase):
             stderr=subprocess.PIPE,
             text=True,
         )
-
 
     def _recursiveFindTestListFiles(self, test_dir: str, exclude_folders: list, verbose: bool = False):
         """Recurses through a directory to find *tests*.yaml files"""
