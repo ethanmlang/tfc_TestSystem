@@ -184,9 +184,9 @@ class TFCTestObject(TFCObject):
         compiler_str = os.environ.get('COMPILER')
         output = output.replace("$TPF_LOC",
                                 self.project_root_+f'test/exe/{compiler_str}/')
-        # Special thing for windows
-        if compiler_str == 'windowsntl':
-            output = output.replace("\n", "&&")
+        # Executable extension
+        exe_ext = ".exe" if os.name == "nt" else ".x"
+        output = output.replace("$EXE_EXT", exe_ext)
 
         env_vars = self.test_system_reference_.env_vars_
 
